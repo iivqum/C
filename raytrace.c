@@ -6,15 +6,23 @@
 
 int SCNW = 512;
 int SCNH = 512;
+int NSAMPLES = 10;
 
 float EPSL = 1e-3;
 float PI = 3.1415;
 
+#define NSPHERES 2
+
 typedef struct Color{unsigned char r,g,b;}Color;
 typedef struct P3D{float x,y,z;}P3D;
 typedef struct Ray{P3D p,d;}Ray;
-typedef struct HitRecord{float t;P3D p,n;int hit;}HitRecord;
+typedef struct HitRecord{float t;P3D p,n;}HitRecord;
 typedef struct Sphere{P3D p;float r;}Sphere;
+
+Sphere spherelist[NSPHERES] = {
+	{{0,0,-30},10},
+	{{0,-1010,-30},1000},
+};
 
 void PSet(P3D *p,float x,float y,float z){p->x=x;p->y=y;p->z=z;}
 void PSetP(P3D *p0,P3D *p1){p0->x=p1->x;p0->y=p1->y;p0->z=p1->z;}
@@ -23,7 +31,7 @@ void PSub(P3D *p0,P3D *p1){p0->x-=p1->x;p0->y-=p1->y;p0->z-=p1->z;}
 float PDot(P3D *p0,P3D *p1){
 	return p0->x*p1->x+p0->y*p1->y+p0->z*p1->z;
 }
-void PScl(P3D *p0,float s){p0->x*=s;p0->y*=s;p0->z*=s;}
+void PScl(P3D *p,float s){p->x*=s;p->y*=s;p->z*=s;}
 
 void ErrNoMem(void){perror("NOMEM");abort();}
 
@@ -68,10 +76,6 @@ Sphere *SphereInit(float x,float y,float z,float r)
 	return sp;
 }
 
-#define NSPHERES 2
-
-Sphere spherelist[NSPHERES];
-
 float RayHitSphere(Ray *r,Sphere *s)
 {
 	P3D oc;
@@ -108,32 +112,30 @@ int GetNearestHit(Ray *r,HitRecord *rec)
 	//sphere normal (p-c)/||(p-c)||
 	PSetP(&rec->n,&rec->p);
 	PSub(&rec->n,&s->p);
-	PScl(&rec->n,PDot(&rec->n,&rec->n));
+	PScl(&rec->n,1/s->r);
 	return 1;
 }
 
-Color *TraceRay(Ray *r,int depth)
+P3D *TraceRay(Ray *r,int depth)
 {
-	if (depth<=0)return ColorInit(0,0,0);
+	if (depth<=0)return P3DInit(0,0,0);
 	HitRecord rec;
 	if (!GetNearestHit(r,&rec))
-		return ColorInit(255,255,255);
+		return P3DInit(1,1,1);
 	P3D d,s;
 	RandomInSphere(&d);
 	PAdd(&d,&rec.n);
 
 	PSetP(&s,&rec.p);
 	PAdd(&s,&d);
-
 	PSub(&s,&rec.p);
+	//if (PDot(&s,&rec.n)<=0)
+		//return P3DInit(0,0,0);
 	Ray r2;
 	PSetP(&r2.p,&rec.p);
 	PSetP(&r2.d,&s);
-	Color *col = TraceRay(&r2,depth-1);
-	col->r = (float)col->r*(float)0.5;
-	col->g = (float)col->g*0.5;
-	col->b = (float)col->b*0.5;
-	printf("%d,%d,%d\n",col->r,col->g,col->b);
+	P3D *col = TraceRay(&r2,depth-1);
+	PScl(col,0.75);
 	return col;
 }
 
@@ -165,26 +167,19 @@ int main(int argc, char *argv[])
 	);
 	png_write_info(png_ptr,info_ptr);
 
-	PSet(&spherelist[0].p,0,0,-30);
-	spherelist[0].r = 10;
-
-	PSet(&spherelist[1].p,0,-1010,-30);
-	spherelist[1].r = 1000;
-
 	Ray r;
 	PSet(&r.p,0,0,0);
-	float ar = SCNW/SCNH;
+	float ar = (float)SCNW/(float)SCNH;
 	png_byte row[SCNW*3*sizeof(png_byte)];
 	for (int i=0;i<SCNH;i++){
 		for (int j=0;j<SCNW;j++){
-			float u = (2*((float)j/((float)SCNW-1))-1)*ar;
-			float v = -(2*((float)i/((float)SCNH-1))-1);
+			float u = (2*((float)j/((float)(SCNW-1)))-1)*ar;
+			float v = -(2*((float)i/((float)(SCNH-1)))-1);
 			PSet(&r.d,u,v,-1);
-			Color *col = TraceRay(&r,50);
-			//printf("%f,%f,%f\n",col->x,col->y,col->z);
-			row[j*3] = (png_byte)col->r;
-			row[j*3+1] = (png_byte)col->g;
-			row[j*3+2] = (png_byte)col->b;
+			P3D *col = TraceRay(&r,50);
+			row[j*3] = (png_byte)(col->x*255);
+			row[j*3+1] = (png_byte)(col->y*255);
+			row[j*3+2] = (png_byte)(col->z*255);
 			free(col);
 		}
 		png_write_row(png_ptr,(png_bytep)row);
