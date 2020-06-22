@@ -81,8 +81,7 @@ float RayHitSphere(Ray *r,Sphere *s)
 	float b = 2*PDot(&oc,&r->d);
 	float c = PDot(&oc,&oc)-(s->r*s->r);
 	float d = b*b-4*a*c;
-	if (d<=0)
-		return 0;
+	if (d<=0)return 0;
 	float d2 = sqrtf(d);
 	float root = (-b-d2)/(2*a);
 	if (root>EPSL)return root;
@@ -102,8 +101,7 @@ int GetNearestHit(Ray *r,HitRecord *rec)
 			s = spherelist+i;
 		}
 	}
-	if (s==NULL)
-		return 0;
+	if (s==NULL)return 0;
 	PSetP(&rec->p,&r->d);
 	PScl(&rec->p,rec->t);
 	PAdd(&rec->p,&r->p);
