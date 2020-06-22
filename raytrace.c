@@ -4,8 +4,8 @@
 #include <float.h>
 #include <png.h>
 
-int SCNW = 512;
-int SCNH = 512;
+int SCNW = 1024;
+int SCNH = 768;
 int NSAMPLES = 10;
 
 float EPSL = 1e-3;
@@ -32,7 +32,6 @@ float PDot(P3D *p0,P3D *p1){
 	return p0->x*p1->x+p0->y*p1->y+p0->z*p1->z;
 }
 void PScl(P3D *p,float s){p->x*=s;p->y*=s;p->z*=s;}
-
 void ErrNoMem(void){perror("NOMEM");abort();}
 
 float RandomFrac(void){
@@ -49,7 +48,6 @@ void RandomInSphere(P3D *p)
 	float z = RandomFracSign();
 	float r = sqrtf(1-z*z);
 	PSet(p,r*cosf(t),r*sinf(t),z);
-	//printf("%f,%f,%f\n",p->x,p->y,p->z);
 }
 
 P3D *P3DInit(float x,float y,float z){
@@ -75,6 +73,7 @@ float RayHitSphere(Ray *r,Sphere *s)
 	PSub(&oc,&s->p);
 	float a = PDot(&r->d,&r->d);
 	float b = 2*PDot(&oc,&r->d);
+	//large radii might cause problems with float
 	float c = PDot(&oc,&oc)-(s->r*s->r);
 	float d = b*b-4*a*c;
 	if (d<=0)return 0;
@@ -88,13 +87,13 @@ float RayHitSphere(Ray *r,Sphere *s)
 
 int GetNearestHit(Ray *r,HitRecord *rec)
 {
-	float t = FLT_MAX;
+	rec->t = FLT_MAX;
 	Sphere *s = NULL;
 	for (int i=0;i<NSPHERES;i++){
 		float t2 = RayHitSphere(r,spherelist+i);
-		if (t2<=0||t2>t)
+		if (t2<=0||t2>rec->t)
 			continue;
-		t = t2;
+		rec->t = t2;
 		s = spherelist+i;
 	}
 	if (s==NULL)return 0;
@@ -127,7 +126,7 @@ P3D *TraceRay(Ray *r,int depth)
 	PSetP(&r2.p,&rec.p);
 	PSetP(&r2.d,&s);
 	P3D *col = TraceRay(&r2,depth-1);
-	PScl(col,0.3);
+	PScl(col,0.5);
 	return col;
 }
 
@@ -169,15 +168,14 @@ int main(int argc, char *argv[])
 			float v = -(2*((float)i/((float)(SCNH-1)))-1);
 			PSet(&r.d,u,v,-1);
 			P3D *col = TraceRay(&r,50);
-			row[j*3] = (png_byte)(col->x*255);
-			row[j*3+1] = (png_byte)(col->y*255);
-			row[j*3+2] = (png_byte)(col->z*255);
+			row[j*3] = (png_byte)(sqrtf(col->x)*255);
+			row[j*3+1] = (png_byte)(sqrtf(col->y)*255);
+			row[j*3+2] = (png_byte)(sqrtf(col->z)*255);
 			free(col);
 		}
 		png_write_row(png_ptr,(png_bytep)row);
 	}
 	png_write_end(png_ptr,NULL);
-
 	png_destroy_write_struct(&png_ptr,&info_ptr);
 	fclose(fp);
 	return 0;
