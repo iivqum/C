@@ -4,9 +4,9 @@
 #include <float.h>
 #include <png.h>
 
-int SCNW = 1024;
-int SCNH = 768;
-int NSAMPLES = 10;
+int SCNW = 512;
+int SCNH = 512;
+int NSAMPLES = 1;
 
 float EPSL = 1e-3;
 float PI = 3.1415;
@@ -120,8 +120,8 @@ P3D *TraceRay(Ray *r,int depth)
 	PSetP(&s,&rec.p);
 	PAdd(&s,&d);
 	PSub(&s,&rec.p);
-	//if (PDot(&s,&rec.n)<=0)
-		//return P3DInit(0,0,0);
+	if (PDot(&s,&rec.n)<=0)
+		return P3DInit(0,0,0);
 	Ray r2;
 	PSetP(&r2.p,&rec.p);
 	PSetP(&r2.d,&s);
@@ -164,6 +164,27 @@ int main(int argc, char *argv[])
 	png_byte row[SCNW*3*sizeof(png_byte)];
 	for (int i=0;i<SCNH;i++){
 		for (int j=0;j<SCNW;j++){
+			P3D avg;
+			PSet(&avg,0,0,0);
+			for (int k=0;k<NSAMPLES;k++){
+				float u = (2*(((float)j+RandomFrac())/((float)(SCNW-1)))-1)*ar;
+				float v = -(2*(((float)i+RandomFrac())/((float)(SCNH-1)))-1);
+				PSet(&r.d,u,v,-1);
+				P3D *col = TraceRay(&r,50);
+				PAdd(&avg,col);
+				free(col);
+			}
+			PScl(&avg,1/(float)NSAMPLES);
+			avg.x = sqrtf(avg.x);
+			avg.y = sqrtf(avg.y);
+			avg.z = sqrtf(avg.z);
+			if (avg.x>1)avg.x=1;
+			if (avg.y>1)avg.y=1;
+			if (avg.z>1)avg.z=1;
+			row[j*3] = (png_byte)(avg.x*255);
+			row[j*3+1] = (png_byte)(avg.y*255);
+			row[j*3+2] = (png_byte)(avg.z*255);			
+/*
 			float u = (2*((float)j/((float)(SCNW-1)))-1)*ar;
 			float v = -(2*((float)i/((float)(SCNH-1)))-1);
 			PSet(&r.d,u,v,-1);
@@ -172,6 +193,7 @@ int main(int argc, char *argv[])
 			row[j*3+1] = (png_byte)(sqrtf(col->y)*255);
 			row[j*3+2] = (png_byte)(sqrtf(col->z)*255);
 			free(col);
+*/
 		}
 		png_write_row(png_ptr,(png_bytep)row);
 	}
