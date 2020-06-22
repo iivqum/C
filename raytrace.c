@@ -49,21 +49,13 @@ void RandomInSphere(P3D *p)
 	float z = RandomFracSign();
 	float r = sqrtf(1-z*z);
 	PSet(p,r*cosf(t),r*sinf(t),z);
+	//printf("%f,%f,%f\n",p->x,p->y,p->z);
 }
 
 P3D *P3DInit(float x,float y,float z){
 	P3D *ptr = malloc(sizeof(P3D));
 	if (ptr==NULL)ErrNoMem();
 	PSet(ptr,x,y,z);
-	return ptr;
-}
-
-Color *ColorInit(unsigned char r,unsigned char g,unsigned char b){
-	Color *ptr = malloc(sizeof(Color));
-	if (ptr==NULL)ErrNoMem();
-	ptr->r = r;
-	ptr->g = g;
-	ptr->b = b;
 	return ptr;
 }
 
@@ -100,10 +92,10 @@ int GetNearestHit(Ray *r,HitRecord *rec)
 	Sphere *s = NULL;
 	for (int i=0;i<NSPHERES;i++){
 		float t2 = RayHitSphere(r,spherelist+i);
-		if (t2>0&&t2<t){
-			t = t2;
-			s = spherelist+i;
-		}
+		if (t2<=0||t2>t)
+			continue;
+		t = t2;
+		s = spherelist+i;
 	}
 	if (s==NULL)return 0;
 	PSetP(&rec->p,&r->d);
@@ -135,7 +127,7 @@ P3D *TraceRay(Ray *r,int depth)
 	PSetP(&r2.p,&rec.p);
 	PSetP(&r2.d,&s);
 	P3D *col = TraceRay(&r2,depth-1);
-	PScl(col,0.75);
+	PScl(col,0.3);
 	return col;
 }
 
