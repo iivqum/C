@@ -4,9 +4,9 @@
 #include <float.h>
 #include <png.h>
 
-int SCNW = 512;
-int SCNH = 512;
-int NSAMPLES = 10;
+int SCNW = 256;
+int SCNH = 256;
+int NSAMPLES = 100;
 
 float EPSL = 1e-3;
 float PI = 3.1415;
@@ -21,7 +21,9 @@ typedef struct Plane{P3D p,color;P3D n;}Plane;
 typedef struct HitRecord{float t;P3D p,n,*color;material_type mt;}HitRecord;
 
 Sphere spherelist[] = {
-	{{0,0,-30},{0.85,0.85,0.85},DIFFUSE,10},
+	{{0,0,-30},{0.85,0.85,0.85},METALLIC,10},
+	{{-20,0,-30},{0.85,0.85,0.85},DIFFUSE,10},
+	{{20,0,-30},{0.85,0.85,0.85},DIFFUSE,10},
 	{{0,-1010,-30},{0.85,0.85,0.85},DIFFUSE,1000}
 };
 
@@ -125,6 +127,7 @@ int ComputeReflectionRay(Ray *r,HitRecord *rec,Ray *out)
 	PSetP(&out->d,&r->d);	
 	PScl(&n,2*PDot(&r->d,&rec->n));
 	PSub(&out->d,&n);
+	return 1;
 }
 
 P3D *TraceRay(Ray *r,int depth)
