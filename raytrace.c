@@ -4,14 +4,14 @@
 #include <float.h>
 #include <png.h>
 
-int SCNW = 1024;
-int SCNH = 768;
+int SCNW = 512;
+int SCNH = 512;
 int NSAMPLES = 100;
 
 float EPSL = 1e-3;
 float PI = 3.1415;
 
-typedef enum {DIFFUSE,METALLIC}material_type;
+typedef enum {DIFFUSE,METALLIC,EMISSIVE}material_type;
 
 typedef struct Color{unsigned char r,g,b;}Color;
 typedef struct P3D{float x,y,z;}P3D;
@@ -21,7 +21,7 @@ typedef struct Plane{P3D p,color;P3D n;}Plane;
 typedef struct HitRecord{float t;P3D p,n,*color;material_type mt;}HitRecord;
 
 Sphere spherelist[] = {
-	{{0,0,-30},{250.0/255.0,208.0/255.0,192.0/255.0},METALLIC,10},
+	{{0,0,-40},{250.0/255.0,208.0/255.0,192.0/255.0},EMISSIVE,10},
 	{{-20,0,-30},{0.85,0.85,0.85},DIFFUSE,10},
 	{{20,0,-30},{0.85,0.85,0.85},DIFFUSE,10},
 	{{0,-1010,-30},{0.85,0.85,0.85},DIFFUSE,1000}
@@ -70,15 +70,15 @@ int RayHitSphere(Ray *r,Sphere *s,float tmax,float *tout)
 	PSetP(&oc,&r->p);
 	PSub(&oc,&s->p);
 	float a = PDot(&r->d,&r->d);
-	float b = 2*PDot(&oc,&r->d);
+	float b = PDot(&oc,&r->d);
 	//large radii might cause problems with float
 	float c = PDot(&oc,&oc)-(s->r*s->r);
-	float d = b*b-4*a*c;
+	float d = b*b-a*c;
 	if (d<=0)return 0;
 	float d2 = sqrtf(d);
-	float root = (-b-d2)/(2*a);
+	float root = (-b-d2)/(a);
 	if (root>EPSL&&root<tmax){*tout = root;return 1;}
-	root = (-b+d2)/(2*a);
+	root = (-b+d2)/(a);
 	if (root>EPSL&&root<tmax){*tout = root;return 1;}
 	return 0;
 }
@@ -135,7 +135,7 @@ P3D *TraceRay(Ray *r,int depth)
 	if (depth<=0)return P3DInit(0,0,0);
 	HitRecord rec;
 	if (!GetNearestHit(r,&rec))
-		return P3DInit(1,1,1);
+		return P3DInit(0,0,0);
 	Ray new;
 	switch(rec.mt){
 		case METALLIC:
@@ -144,6 +144,8 @@ P3D *TraceRay(Ray *r,int depth)
 		case DIFFUSE:
 			if (ComputeDiffuseRay(r,&rec,&new))
 				break;
+		case EMISSIVE:
+			return rec.color;
 		default:
 			return P3DInit(0,0,0);
 	}
@@ -194,7 +196,7 @@ int main(int argc, char *argv[])
 				PSet(&r.d,u,v,-1);
 				P3D *col = TraceRay(&r,50);
 				PAdd(&avg,col);
-				free(col);
+				//free(col);
 			}
 			PScl(&avg,1/(float)NSAMPLES);
 			avg.x = sqrtf(avg.x);
