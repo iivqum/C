@@ -6,28 +6,37 @@
 
 int SCNW = 512;
 int SCNH = 512;
-int NSAMPLES = 1;
+int NSAMPLES = 10;
 
 float EPSL = 1e-3;
 float PI = 3.1415;
 
-#define NSPHERES 2
+typedef enum {DIFFUSE,METALLIC}material_type;
 
 typedef struct Color{unsigned char r,g,b;}Color;
 typedef struct P3D{float x,y,z;}P3D;
 typedef struct Ray{P3D p,d;}Ray;
-typedef struct HitRecord{float t;P3D p,n;}HitRecord;
-typedef struct Sphere{P3D p;float r;}Sphere;
+typedef struct Sphere{P3D p,color;material_type mt;float r;}Sphere;
+typedef struct Plane{P3D p,color;P3D n;}Plane;
+typedef struct HitRecord{float t;P3D p,n,*color;material_type mt;}HitRecord;
 
-Sphere spherelist[NSPHERES] = {
-	{{0,0,-30},10},
-	{{0,-1010,-30},1000},
+Sphere spherelist[] = {
+	{{0,0,-30},{0.85,0.85,0.85},DIFFUSE,10},
+	{{0,-1010,-30},{0.85,0.85,0.85},DIFFUSE,1000}
 };
+
+Plane planelist[] = {
+
+};
+
+#define NSPHERES sizeof(spherelist)/sizeof(Sphere)
+#define NPLANES sizeof(planelist)/sizeof(Sphere)
 
 void PSet(P3D *p,float x,float y,float z){p->x=x;p->y=y;p->z=z;}
 void PSetP(P3D *p0,P3D *p1){p0->x=p1->x;p0->y=p1->y;p0->z=p1->z;}
 void PAdd(P3D *p0,P3D *p1){p0->x+=p1->x;p0->y+=p1->y;p0->z+=p1->z;}
 void PSub(P3D *p0,P3D *p1){p0->x-=p1->x;p0->y-=p1->y;p0->z-=p1->z;}
+void PMul(P3D *p0,P3D *p1){p0->x*=p1->x;p0->y*=p1->y;p0->z*=p1->z;}
 float PDot(P3D *p0,P3D *p1){
 	return p0->x*p1->x+p0->y*p1->y+p0->z*p1->z;
 }
@@ -38,14 +47,10 @@ float RandomFrac(void){
 	return (float)rand()/(float)(RAND_MAX+1);
 }
 
-float RandomFracSign(void){
-	return 2*RandomFrac()-1;
-}
-
 void RandomInSphere(P3D *p)
 {
 	float t = RandomFrac()*2*PI;
-	float z = RandomFracSign();
+	float z = 2*RandomFrac()-1;;
 	float r = sqrtf(1-z*z);
 	PSet(p,r*cosf(t),r*sinf(t),z);
 }
@@ -57,16 +62,7 @@ P3D *P3DInit(float x,float y,float z){
 	return ptr;
 }
 
-Sphere *SphereInit(float x,float y,float z,float r)
-{
-	struct Sphere *sp = malloc(sizeof(struct Sphere));
-	if (sp==NULL)ErrNoMem();
-	PSet(&sp->p,x,y,z);
-	sp->r = r;
-	return sp;
-}
-
-float RayHitSphere(Ray *r,Sphere *s)
+int RayHitSphere(Ray *r,Sphere *s,float tmax,float *tout)
 {
 	P3D oc;
 	PSetP(&oc,&r->p);
@@ -79,32 +75,56 @@ float RayHitSphere(Ray *r,Sphere *s)
 	if (d<=0)return 0;
 	float d2 = sqrtf(d);
 	float root = (-b-d2)/(2*a);
-	if (root>EPSL)return root;
+	if (root>EPSL&&root<tmax){*tout = root;return 1;}
 	root = (-b+d2)/(2*a);
-	if (root>EPSL)return root;
-	return -1;
+	if (root>EPSL&&root<tmax){*tout = root;return 1;}
+	return 0;
 }
 
 int GetNearestHit(Ray *r,HitRecord *rec)
 {
 	rec->t = FLT_MAX;
-	Sphere *s = NULL;
 	for (int i=0;i<NSPHERES;i++){
-		float t2 = RayHitSphere(r,spherelist+i);
-		if (t2<=0||t2>rec->t)
+		Sphere *s = spherelist+i;
+		if (!RayHitSphere(r,s,rec->t,&rec->t))
 			continue;
-		rec->t = t2;
-		s = spherelist+i;
+		PSetP(&rec->p,&r->d);
+		PScl(&rec->p,rec->t);
+		PAdd(&rec->p,&r->p);
+		//sphere normal
+		PSetP(&rec->n,&rec->p);
+		PSub(&rec->n,&s->p);
+		PScl(&rec->n,1/s->r);	
+
+		rec->color = &s->color;	
+		rec->mt = s->mt;	
 	}
-	if (s==NULL)return 0;
-	PSetP(&rec->p,&r->d);
-	PScl(&rec->p,rec->t);
-	PAdd(&rec->p,&r->p);
-	//sphere normal (p-c)/||(p-c)||
-	PSetP(&rec->n,&rec->p);
-	PSub(&rec->n,&s->p);
-	PScl(&rec->n,1/s->r);
+	return rec->t<FLT_MAX;
+}
+
+int ComputeDiffuseRay(Ray *r,HitRecord *rec,Ray *out)
+{
+	P3D d,s;
+	RandomInSphere(&d);
+	PAdd(&d,&rec->n);
+	PSetP(&s,&rec->p);
+	PAdd(&s,&d);
+	PSub(&s,&rec->p);
+	if (PDot(&s,&rec->n)<=0)
+		return 0;
+	PSetP(&out->p,&rec->p);
+	PSetP(&out->d,&s);
 	return 1;
+}
+
+int ComputeReflectionRay(Ray *r,HitRecord *rec,Ray *out)
+{
+	P3D n;
+	PSetP(&n,&rec->n);
+	PSetP(&out->p,&rec->p);
+	PSetP(&out->d,&r->d);	
+	PScl(&n,2*PDot(&r->d,&rec->n));
+	PSub(&out->d,&n);
 }
 
 P3D *TraceRay(Ray *r,int depth)
@@ -113,20 +133,20 @@ P3D *TraceRay(Ray *r,int depth)
 	HitRecord rec;
 	if (!GetNearestHit(r,&rec))
 		return P3DInit(1,1,1);
-	P3D d,s;
-	RandomInSphere(&d);
-	PAdd(&d,&rec.n);
-
-	PSetP(&s,&rec.p);
-	PAdd(&s,&d);
-	PSub(&s,&rec.p);
-	if (PDot(&s,&rec.n)<=0)
-		return P3DInit(0,0,0);
-	Ray r2;
-	PSetP(&r2.p,&rec.p);
-	PSetP(&r2.d,&s);
-	P3D *col = TraceRay(&r2,depth-1);
-	PScl(col,0.5);
+	Ray new;
+	switch(rec.mt){
+		case METALLIC:
+			ComputeReflectionRay(r,&rec,&new);
+			break;
+		case DIFFUSE:
+			if (!ComputeDiffuseRay(r,&rec,&new))
+				return P3DInit(0,0,0);
+			break;
+		//default:
+		//	return P3DInit(0,0,0);
+	}
+	P3D *col = TraceRay(&new,depth-1);
+	PMul(col,rec.color);
 	return col;
 }
 
@@ -156,15 +176,15 @@ int main(int argc, char *argv[])
 		PNG_COMPRESSION_TYPE_DEFAULT,
 		PNG_FILTER_TYPE_DEFAULT
 	);
+	//png_set_compression_level(png_ptr,0);
 	png_write_info(png_ptr,info_ptr);
-
 	Ray r;
+	P3D avg;
 	PSet(&r.p,0,0,0);
 	float ar = (float)SCNW/(float)SCNH;
 	png_byte row[SCNW*3*sizeof(png_byte)];
 	for (int i=0;i<SCNH;i++){
 		for (int j=0;j<SCNW;j++){
-			P3D avg;
 			PSet(&avg,0,0,0);
 			for (int k=0;k<NSAMPLES;k++){
 				float u = (2*(((float)j+RandomFrac())/((float)(SCNW-1)))-1)*ar;
@@ -195,6 +215,7 @@ int main(int argc, char *argv[])
 			free(col);
 */
 		}
+		printf("Progress:%d%c\r",(int)((float)i/(float)(SCNH-1)*100),'%');
 		png_write_row(png_ptr,(png_bytep)row);
 	}
 	png_write_end(png_ptr,NULL);
